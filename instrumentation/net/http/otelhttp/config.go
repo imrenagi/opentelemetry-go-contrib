@@ -47,6 +47,8 @@ type config struct {
 
 	TracerProvider trace.TracerProvider
 	MeterProvider  metric.MeterProvider
+
+	RegisteredRoute string
 }
 
 // Option interface used for setting optional config properties.
@@ -150,6 +152,12 @@ func WithSpanOptions(opts ...trace.SpanStartOption) Option {
 func WithFilter(f Filter) Option {
 	return optionFunc(func(c *config) {
 		c.Filters = append(c.Filters, f)
+	})
+}
+
+func WithHTTPRouteTag(route string) Option {
+	return optionFunc(func(c *config) {
+		c.RegisteredRoute = route
 	})
 }
 

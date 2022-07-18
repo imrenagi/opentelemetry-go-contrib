@@ -53,6 +53,7 @@ type Handler struct {
 	valueRecorders    map[string]syncfloat64.Histogram
 	publicEndpoint    bool
 	publicEndpointFn  func(*http.Request) bool
+	registeredRoute   string
 }
 
 func defaultHandlerFormatter(operation string, _ *http.Request) string {
@@ -90,6 +91,7 @@ func (h *Handler) configure(c *config) {
 	h.spanNameFormatter = c.SpanNameFormatter
 	h.publicEndpoint = c.PublicEndpoint
 	h.publicEndpointFn = c.PublicEndpointFn
+	h.registeredRoute = c.RegisteredRoute
 }
 
 func handleErr(err error) {
@@ -213,7 +215,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Use floating point division here for higher precision (instead of Millisecond method).
 	elapsedTime := float64(time.Since(requestStartTime)) / float64(time.Millisecond)
 
-	h.valueRecorders[ServerLatency].Record(ctx, elapsedTime, attributes...)
+	// Count of request to record errors ratio
+	durationAttributes := append(attributes, semconv.HTTPStatusCodeKey.Int(rww.statusCode))
+	if h.registeredRoute != "" {
+		durationAttributes = append(durationAttributes, semconv.HTTPRouteKey.String(h.registeredRoute))
+	}
+	h.valueRecorders[ServerLatency].Record(ctx, elapsedTime, durationAttributes...)
 }
 
 func setAfterServeAttributes(span trace.Span, read, wrote int64, statusCode int, rerr, werr error) {
@@ -246,6 +253,7 @@ func WithRouteTag(route string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		span := trace.SpanFromContext(r.Context())
 		span.SetAttributes(semconv.HTTPRouteKey.String(route))
+
 		h.ServeHTTP(w, r)
 	})
 }
